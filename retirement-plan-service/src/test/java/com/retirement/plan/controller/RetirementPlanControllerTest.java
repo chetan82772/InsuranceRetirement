@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,7 +48,10 @@ public class RetirementPlanControllerTest {
         plan.setMonthlyInvestment(5000.0);
         plan.setExpectedReturn(10.0);
         plan.setYearsToRetirement(35);
-        plan.setEstimatedCorpus(1000000.0);
+        plan.setCurrency("INR");
+
+        plan.setEstimatedCorpus(
+                BigDecimal.valueOf(1007.88));
 
         when(service.createPlan(any(RetirementPlan.class)))
                 .thenReturn(plan);
@@ -59,8 +63,12 @@ public class RetirementPlanControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId")
                         .value(1))
+
+                .andExpect(jsonPath("$.currency")
+                        .value("INR"))
+
                 .andExpect(jsonPath("$.estimatedCorpus")
-                        .value(1000000.0));
+                        .value(1007.88));
     }
 
     @Test
@@ -70,6 +78,7 @@ public class RetirementPlanControllerTest {
 
         plan.setPlanId(1L);
         plan.setUserId(1L);
+        plan.setCurrency("USD");
 
         when(service.getAllPlans())
                 .thenReturn(Arrays.asList(plan));
@@ -77,7 +86,11 @@ public class RetirementPlanControllerTest {
         mockMvc.perform(get("/plans"))
 
                 .andExpect(status().isOk())
+
                 .andExpect(jsonPath("$[0].userId")
-                        .value(1));
+                        .value(1))
+
+                .andExpect(jsonPath("$[0].currency")
+                        .value("USD"));
     }
 }

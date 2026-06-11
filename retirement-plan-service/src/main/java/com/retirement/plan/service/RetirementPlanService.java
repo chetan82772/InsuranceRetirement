@@ -1,5 +1,7 @@
 package com.retirement.plan.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,77 +25,153 @@ public class RetirementPlanService {
                     "Monthly investment must be greater than 0");
         }
 
-        if (plan.getExpectedReturn() <= 0 ||
-                plan.getExpectedReturn() > 30) {
+        if (plan.getExpectedReturn() <= 0
+                || plan.getExpectedReturn() > 30) {
 
             throw new IllegalArgumentException(
                     "Expected return must be between 1 and 30");
         }
 
-        if (plan.getYearsToRetirement() <= 0 ||
-                plan.getYearsToRetirement() > 50) {
+        if (plan.getYearsToRetirement() <= 0
+                || plan.getYearsToRetirement() > 50) {
 
             throw new IllegalArgumentException(
                     "Years to retirement must be between 1 and 50");
         }
 
-        double monthlyRate = plan.getExpectedReturn() / 100 / 12;
+        // Currency Validation
 
-        int months = plan.getYearsToRetirement() * 12;
+        if (!"INR".equals(plan.getCurrency())
+                && !"USD".equals(plan.getCurrency())) {
 
-        double corpus = plan.getMonthlyInvestment()
-                * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+            throw new IllegalArgumentException(
+                    "Currency must be INR or USD");
+        }
+
+        // Retirement Corpus Calculation
+
+        double monthlyRate =
+                plan.getExpectedReturn() / 100 / 12;
+
+        int months =
+                plan.getYearsToRetirement() * 12;
+
+        double corpus =
+                plan.getMonthlyInvestment()
+                * ((Math.pow(1 + monthlyRate, months) - 1)
+                / monthlyRate)
                 * (1 + monthlyRate);
 
         // Outbound Validation
 
-        if (Double.isNaN(corpus) || Double.isInfinite(corpus)) {
+        if (Double.isNaN(corpus)
+                || Double.isInfinite(corpus)) {
+
             throw new IllegalStateException(
                     "Invalid corpus calculated");
         }
 
         if (corpus <= 0) {
+
             throw new IllegalStateException(
                     "Calculated corpus must be greater than zero");
         }
 
-        // Round to 2 decimal places
-        corpus = Math.round(corpus * 100.0) / 100.0;
+        // Convert to BigDecimal
 
-        plan.setEstimatedCorpus(corpus);
+        BigDecimal estimatedCorpus =
+                BigDecimal.valueOf(corpus)
+                .setScale(2, RoundingMode.HALF_UP);
 
-        RetirementPlan savedPlan = repository.save(plan);
+        plan.setEstimatedCorpus(estimatedCorpus);
+
+        RetirementPlan savedPlan =
+                repository.save(plan);
 
         savedPlan.setEstimatedCorpusFormatted(
-                formatIndianCurrency(corpus));
+                formatCurrency(
+                        estimatedCorpus,
+                        savedPlan.getCurrency()));
 
         return savedPlan;
     }
 
     public List<RetirementPlan> getAllPlans() {
 
-        List<RetirementPlan> plans = repository.findAll();
+        List<RetirementPlan> plans =
+                repository.findAll();
 
         plans.forEach(plan -> {
-            if (plan.getEstimatedCorpus() != 0) {
+
+            if (plan.getEstimatedCorpus() != null) {
+
                 plan.setEstimatedCorpusFormatted(
-                        formatIndianCurrency(plan.getEstimatedCorpus()));
+                        formatCurrency(
+                                plan.getEstimatedCorpus(),
+                                plan.getCurrency()));
             }
         });
 
         return plans;
     }
 
-    private String formatIndianCurrency(double amount) {
+    private String formatCurrency(
+            BigDecimal amount,
+            String currency) {
+
+        double value = amount.doubleValue();
+
+        if ("INR".equals(currency)) {
+
+            return formatIndianCurrency(value);
+
+        } else {
+
+            return formatUSCurrency(value);
+        }
+    }
+
+    private String formatIndianCurrency(
+            double amount) {
 
         if (amount >= 10000000) {
-            return String.format("₹%.2f Crore", amount / 10000000);
+
+            return String.format(
+                    "₹%.2f Crore",
+                    amount / 10000000);
         }
 
         if (amount >= 100000) {
-            return String.format("₹%.2f Lakh", amount / 100000);
+
+            return String.format(
+                    "₹%.2f Lakh",
+                    amount / 100000);
         }
 
-        return String.format("₹%,.2f", amount);
+        return String.format(
+                "₹%,.2f",
+                amount);
+    }
+
+    private String formatUSCurrency(
+            double amount) {
+
+        if (amount >= 1000000000) {
+
+            return String.format(
+                    "$%.2f Billion",
+                    amount / 1000000000);
+        }
+
+        if (amount >= 1000000) {
+
+            return String.format(
+                    "$%.2f Million",
+                    amount / 1000000);
+        }
+
+        return String.format(
+                "$%,.2f",
+                amount);
     }
 }
